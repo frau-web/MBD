@@ -1,11 +1,7 @@
 #######################################################################
 #                                                                     #
-#    DATA VISUALIZATION GROUP WORK I - DUE Feb 12th, 2021             #
+#    DATA VISUALIZATION IN R                                          #
 #    HUMAN TRAFFICKING                                                #
-#                                                                     #
-#    Group 1/A    - Xaver Robert Albers-Schönberg Engeler, Alejandro  #
-#    Alcuaz Temiño. Bohan Chou, Sami Jahel, Alejandro Silva Hernandez,#
-#    Francisco Eduardo Teixeira do Prado Kelly, Martina Weberruss     #
 #                                                                     #
 #######################################################################
 
