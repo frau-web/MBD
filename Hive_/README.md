@@ -1,10 +1,10 @@
 # Hive Twitter Sentiment Analysis
 
 **Purpose:** 
-- Ingest Tweets using Nifi and perform EDA and a sentiment analysis on those tweets to further understand Apache Hive
+- Ingest Tweets on a specific hashtag using Nifi and perform EDA and a sentiment analysis on those tweets to further understand Apache Hive
 - Individual class assignment during the Master in Business Analytics & Big Data, Intro to Big Data Architecture Class
 
-**Data used:** Tweets on the word #
+**Data used:** Tweets on the word #sundayvibes
 
 **Language used:** Apache Hive
 
