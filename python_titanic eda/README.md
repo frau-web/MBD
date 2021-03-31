@@ -2,7 +2,7 @@
 
 **Purpose:** 
 - Perform EDA on the Titanic Dataset and identify a strategy to impute missing values
-- class assignment during the Master in Business Analytics & Big Data, Python Class
+- Individual class assignment during the Master in Business Analytics & Big Data, Python Class
 
 **Dataset:** Titanic Train Dataset (Source: https://www.kaggle.com/c/titanic/data?select=train.csv)
 
