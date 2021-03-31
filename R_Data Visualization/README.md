@@ -6,6 +6,7 @@ The code is part of a group assignment for the during the Master in Business Ana
 **Dataset:** https://www.ctdatacollaborative.org/ 
 
 **Language used:** R
+
 **Main Libraries used:** ggplot2, gganimate, ggthemes, tidyr, dplyr, tidyverse
 
 
