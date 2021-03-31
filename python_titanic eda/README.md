@@ -16,7 +16,7 @@
 - Compute the percentage of survivors by sex (i.e. the percentage of male passengers that survived and female passengers that survived) and the sex distribution of survivors (i.e. percentage of survivors that were men and percentage of survivors that were women)
 - Display in a 2 x 2 DataFrame the probability of being male/female and surviving/not surviving
 
-##### Part II: Imputing missing values
+#### Part II: Imputing missing values
 Devise some strategy to impute the missing values in the Age column.
 You cannot use machine learning algorithms for the feature engineering part, only manual techniques. This rules out KNN, Deep Learning, sklearn.preprocessing.Imputer, fancyimpute, missingno, and similar.
 
