@@ -8,7 +8,7 @@
 
 **Language used:** Python
 
-##Tasks:
+## Tasks:
 #### Part I: Exploratory analysis
 
 - Read the dataset correctly using pandas, using an appropriate column as index
