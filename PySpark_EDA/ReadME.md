@@ -6,7 +6,7 @@ The analysis was conducted using PySpark and Spark infrastructure, with a focus 
 This analysis was done as individual assignment during the Master in Business Analytics & Big Data at IE University.
 
 **Dataset:** 
-- Dataset used: https://www.kaggle.com/chaitanyakck/crime-data-from-2020-to-present?select=Crime_Data_from_2020_to_Present.csv
+- Dataset used: https://www.kaggle.com/chaitanyakck/crime-data-from-2020-to-present?select=Crime_Data_from_2010_to_2019.csv
 - Original Datasource incl. Descriptions:
   - Metadata: https://data.lacity.org/Public-Safety/Crime-Data-from-2010-to-2019/63jg-8b9z
   - Data: https://catalog.data.gov/dataset/crime-data-from-2010-to-2019
