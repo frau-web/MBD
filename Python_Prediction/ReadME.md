@@ -14,7 +14,7 @@ provided (bike sharing data on Washington DC)
 https://github.com/alsilvah
 https://github.com/hannahbhchou
 
-## Tasks
+## Overview
 1. Exploratory Data Analysis (descriptive analytics)
 -    Time-related Data
 -    Weather-related Data
