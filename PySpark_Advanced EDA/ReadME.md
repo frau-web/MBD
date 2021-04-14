@@ -9,6 +9,3 @@ Provided by Professor
 **Language used:** PySpark
 
 **Coding Lead**: https://github.com/alsilvah
-
-## Comments:
-Key findings are summarized in a brief attached report. 
