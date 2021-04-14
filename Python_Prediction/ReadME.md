@@ -11,8 +11,8 @@ provided (bike sharing data on Washington DC)
 **Libraries used:** Pandas, Numpy, Seaborn, Matplotlib, Scikit Learn
 
 **Collaborators:**
-https://github.com/alsilvah
-https://github.com/hannahbhchou
+- https://github.com/alsilvah
+- https://github.com/hannahbhchou
 
 ## Overview
 1. Exploratory Data Analysis (descriptive analytics)
