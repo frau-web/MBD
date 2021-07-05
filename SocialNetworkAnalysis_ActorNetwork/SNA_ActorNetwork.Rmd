@@ -1,0 +1,376 @@
+---
+title: "Assignment"
+output: html_notebook
+---
+
+
+On this first assignment, applying the basic functions of the Igraph package is required. The following datasets are going to be used:
+
+* Actors dataset - undirected graph - : For the 2005 Graph Drawing conference a data set was provided of the IMDB movie database. We will use a reduced version of this dataset, which derived all actor-actor collaboration edges where the actors co-starred in at least 2 movies together between 1995 and 2004. 
+
+
+You have to complete the code chunks in this document but also analyze the results, extract insights and answer the short questions. Fill the CSV attached with your answers, sometimes just the number is enough, some others just a small sentence. Remember to change the header with your email.
+
+In your submission please upload both the R Markdown and the CSV with the solutions.
+
+
+
+# 1.1 Create networks
+
+First let's remove all the objects we created so far and install and load the package in order to start from an empty environment.
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE, fig.showtext=FALSE}
+#rm(list=ls())
+#install.packages("igraph")
+library('igraph')
+```
+```
+
+
+# Loading data
+
+In this section, the goal is loading the datasets given, building the graph and analyzing basics metrics. Include the edge or node attributes you consider.
+
+Describe the values provided by summary function on the graph object.
+*1) How many nodes are there?*
+*2) How many edges are there?*
+
+
+```{r}
+# Data Sources
+filename_edges = ("https://gist.githubusercontent.com/frau-web/8fca158ce9f03f850b477ac24cbe39f0/raw/8f1c49dab0ea7b2daa16224b1b358af3f2095a71/imdb_actor_edges.tsv")
+filename_key = ("https://gist.githubusercontent.com/frau-web/0de3e5e59a418f593cfb37ce7223ebfc/raw/af751d80d8db9f2d49cf9f543d0a26b5ec6b47fe/imdb_actors_key")
+
+# Create dataframes
+df_edges <- read.table(file = filename_edges, sep = '\t', header = TRUE)
+df_key <- read.table(file = filename_key, sep = '\t', header = TRUE)
+df_key_reduced <- df_key[,1:2]
+
+# Create undirected graph from dataframe
+actorNetwork <- graph_from_data_frame(d=df_edges, vertices=df_key, directed=F)
+
+actorNetwork            #info data on the graph incl. number of nodes and edges
+summary(actorNetwork)   #summary data on the graph incl. number of nodes and edges
+
+```
+
+
+# Degree distribution
+
+
+Analyse the degree distribution. Compute the total degree distribution.
+*3) How does this distributions look like?*
+*4) What is the maximum degree?*
+*5) What is the minum degree?*
+```{r}
+# (1) Degree Distribution: Histogram
+
+# Calculate degrees and store as df
+degrees <- degree(actorNetwork, mode="all")
+actorNetwork.degree.histogram <- as.data.frame(table(degrees))
+
+#Convert the first column to numbersto make the log-log conversion work
+actorNetwork.degree.histogram[,1] <- as.numeric(actorNetwork.degree.histogram[,1]) 
+
+# Plot degree distribution 
+library("ggplot2")
+ggplot(actorNetwork.degree.histogram, aes(x = degrees, y = Freq)) +
+  geom_point() +
+  scale_x_continuous("Degree\n(nodes with this amount of connections)") +
+  scale_y_continuous("Frequency") +
+  ggtitle("Degree Distribution") +
+  theme_bw()
+
+# (2) Degree Calculations
+mean(degrees) # Average number of degrees
+median(degrees)  # Median number of degrees
+max(degrees)  # Max number of degrees
+min(degrees)  # Min number of degrees
+```
+
+
+
+
+
+# Network Diameter and Average Path Length
+*6) What is the diameter of the graph?*
+*7) What is the avg path length of the graph?*
+```{r}
+
+
+is_connected(actorNetwork) # result is -> FALSE, unconnected graph
+
+diameter(actorNetwork, unconnected=T, directed=F, weight=NA)
+diameter(actorNetwork, unconnected=T, directed=F) # edge weights used by default unless set to NA
+
+mean_distance(actorNetwork, directed=F, unconnected=T)
+
+```
+
+
+# Node importance: Centrality measures
+
+Obtain the distribution of the number of movies made by an actor and the number of genres in which an actor starred in. It may be useful to analyze and discuss the results to be obtained in the following exercises.
+
+```{r}
+# (1) Number of movies per actor
+# Distribution of Number of movies per actor - saved as dist_num_movies
+library("dplyr")
+df_key %>% group_by(movies_95_04) %>% summarize(count = n()) -> dist_num_movies
+
+# Plot: Distribution of movies per actor for actors with less than 100 movies
+df_key %>% filter(movies_95_04<=100) %>% group_by(movies_95_04) %>% summarize(count = n()) %>% 
+ggplot() +
+  geom_col(aes(x=movies_95_04, y=count)) +
+  scale_x_continuous("Number of movies per actor\n(from 1995-2004)") +
+  scale_y_continuous("Frequency\n(of number of movies)") +
+  ggtitle("Distribution of Number of movies per actor (with 100 or less movies") +
+  theme_bw()
+  
+# Top20 Actors with the highest movies count
+df_key %>% arrange(-movies_95_04) %>% select("name","movies_95_04","genres_count") %>%  filter(movies_95_04 > quantile(movies_95_04, .9989))
+
+
+
+# (2) Number of genres per actor
+# Obtain Number of Genres per actor - saved as dist_genres_count
+df_key$genres_count <- lengths(gregexpr("\\W+", df_key$genres )) + 1 #count number of words in genres
+
+df_key$genres_count <- floor(df_key$genres_count/2) #divide by two to drop counts of genres
+
+df_key %>% group_by(genres_count ) %>% summarize(count = n()) -> dist_genres_count
+
+# Plot: Distribution of genres per actor
+df_key %>% group_by(genres_count) %>% summarize(count = n()) %>% 
+ggplot() +
+  geom_col(aes(x=genres_count, y=count)) +
+  scale_x_continuous("Number of Genres per actor\n(from 1995-2004)") +
+  scale_y_continuous("Frequency\n(of number of genres)") +
+  ggtitle("Distribution of Number of Genres per actor") +
+  theme_bw()
+
+# Top-Actors with the highest genres count
+df_key %>% arrange(-genres_count) %>%  select("name","movies_95_04","genres_count") %>%  filter(genres_count > quantile(genres_count, .998))
+
+
+```
+
+Obtain three vectors with the degree, betweeness and closeness for each vertex of the actors' graph.
+
+```{r}
+
+v_degree <- degree(actorNetwork, mode="all")
+
+v_betweenness <- betweenness(actorNetwork, v=V(actorNetwork), normalized=TRUE)
+
+v_closeness <- closeness(actorNetwork, v=V(actorNetwork), mode="all", normalized=TRUE)
+
+```
+
+
+Obtain the list of the 20 actors with the largest degree centrality. It can be useful to show a list with the degree, the name of the actor, the number of movies, the main genre, and the number of genres in which the actor has participated.
+
+*8) Who is the actor with highest degree centrality?*
+*9) How do you explain the high degree of the top-20 list??*
+```{r}
+# Create df from degree vector
+num_degrees <- sort(v_degree, decreasing=TRUE)[1:20]
+
+df_degrees<-as.data.frame(num_degrees)
+
+# Add the index as new column Name
+df_degrees <- cbind(Name=rownames(df_degrees),df_degrees)
+
+# Join degree df with df_key variables id, movies, genre
+library(sqldf)
+df_degrees <- sqldf("select a.*, b.id, b.movies_95_04, b.main_genre, b.genres, b.genres_count from df_degrees a left outer join df_key b on a.Name=b.name")
+
+# Get Actor name and id with highest degree centrality
+df_degrees[which.max(df_degrees$num_degrees),c("Name","id","num_degrees","movies_95_04","genres_count")]
+
+# 20 Top-Actors with the highest degrees count
+df_degrees %>% arrange(-num_degree) %>% select("Name","num_degrees","movies_95_04","genres_count") 
+
+mean(df_degrees$movies_95_04)
+mean(df_key$movies_95_04)
+
+mean(df_degrees$genres_count)
+mean(df_key$genres_count)
+
+```
+
+
+
+Obtain the list of the 20 actors with the largest betweenness centrality. Show a list with the betweenness, the name of the actor, the number of movies, the main genre, and the number of genres in which the actor has participated.
+*10) Who is the actor with highest betweenes?*
+*11) How do you explain the high betweenness of the top-20 list?*
+```{r}
+
+# Create df from betweenness vector
+betweenness <- sort(v_betweenness, decreasing=TRUE)[1:20]
+
+df_betweenness<-as.data.frame(betweenness)
+
+# Add the index as new column Name
+df_betweenness <- cbind(Name=rownames(df_betweenness),df_betweenness)
+
+# Join betweenness df with df_key variables id, movies, genre
+library(sqldf)
+df_betweenness <- sqldf("select a.*, b.id, b.movies_95_04, b.main_genre, b.genres,b.genres_count from df_betweenness a left outer join df_key b on a.Name=b.name")
+
+# Get Actor name and id with highest betweenness
+df_betweenness[which.max(df_betweenness$betweenness),c("Name","id","betweenness","movies_95_04","genres_count")]
+
+# 20 Top-Actors with the highest betweenness
+df_betweenness %>% arrange(-betweenness) %>% select("Name","betweenness","movies_95_04","genres_count","main_genre") 
+
+
+mean(df_betweenness$movies_95_04)
+mean(df_key$movies_95_04)
+
+mean(df_betweenness$genres_count)
+mean(df_key$genres_count)
+
+```
+
+
+Obtain the list of the 20 actors with the largest closeness centrality. Show a list with the closeness the name of the actor, the number of movies, the main genre, and the number of genres in which the actor has participated.
+
+*12) Who is the actor with highest closeness centrality?*
+*13) How do you explain the high closeness of the top-20 list? *
+```{r}
+
+# Create df from closeness centrality vector
+closeness <- sort(v_closeness, decreasing=TRUE)[1:20]
+
+df_closeness<-as.data.frame(closeness)
+
+# Add the index as new column Name
+df_closeness <- cbind(Name=rownames(df_closeness),df_closeness)
+
+# Join closeness centrality df with df_key variables id, movies, genre
+library(sqldf)
+df_closeness <- sqldf("select a.*, b.id, b.movies_95_04, b.main_genre, b.genres, b.genres_count from df_closeness a left outer join df_key b on a.Name=b.name")
+
+# Get Actor name and id with highest closeness centrality
+df_closeness[which.max(df_closeness$closeness),c("Name","id","closeness","movies_95_04","genres_count")]
+
+
+# 20 Top-Actors with the highest closeness centrality
+df_closeness %>% arrange(-closeness) %>% select("Name","closeness","movies_95_04","genres_count","main_genre") 
+
+
+mean(df_closeness$movies_95_04)
+mean(df_key$movies_95_04)
+
+mean(df_closeness$genres_count)
+mean(df_key$genres_count)
+
+```
+
+
+
+# Network Models (Optional)
+Explore the Erdös-Renyi model and compare its structural properties to those of real-world networks (actors):
+
+* Degree distribution  P(k)
+* Network Diameter and Average Path Length
+* (Global and Local) Clustering Coefficient
+
+```{r}
+
+## Defining a simple model with 300 vertices and 350 randomly placed edges
+#gnm-type: ‘n’ vertices and ‘m’ edges, chosen uniformly randomly from the set of all possible edges
+g <- erdos.renyi.game(500, 350, type = "gnm") 
+plot(g, vertex.label= NA, edge.arrow.size=0.02,vertex.size = 0.5, xlab = "Random Network: G(N,L) model")
+
+## Gilbert: Defining a simple model with 500 vertices and each pair of N nodes is connected with probability p 0.0035 (gnp-type)
+g <- erdos.renyi.game(500, 0.0035, type = "gnp")
+plot(g, vertex.label= NA, edge.arrow.size=0.02,vertex.size = 0.5, xlab = "Random Network: G(N,p) model")
+
+
+# (1) Degree and degree distribution
+d = degree(g, mode = "all")
+hist(d)
+
+# Distribution in a Random graph is generally resembling more of a normal distribution,
+# meaning that in random graphs most nodes are average linked with few nodes that are 
+# either highly or lowly linked. In real networks, on the contrary, we have a very high
+# number of lowly-linked nodes with very few highly-linked nodes (the graph is heavily skewed)
+
+# (2) Network Diameter and Average Path Length
+# It is important to mention that since the graph is developed randomly, there are 
+# thus many different possibilities how this graph can be developed. Therefore, when measuring 
+# properties in random graphs, the measures are calculated over all graphs that can be generated
+# by the model and then averaged. 
+# In random graphs, the expected diameter size tends to the average path length in the limit, it
+# is rather low. 
+
+ 
+diameter(g, unconnected=T) # edge weights used by default unless set to NA # Diameter of erdos.renyi
+mean_distance(g, directed=F, unconnected=T) # Avg. Path length of erdos.renyi
+
+
+# (3) (Global and Local) Clustering Coefficient
+# The local clustering coefficient is calculated as the number of connected pairs of the node's neighbors
+# out of the total number of pairs of the node's neighbors. In random network models, it is generally rather low,
+# Which is however a rather unrealistc assumption in real life. 
+# The global clustering coefficient of a random graph generated by G(n; p) is p.
+
+                                                                                                                                                                                                                                                                                                                     
+
+
+```
+
+
+# Comunity detection (Optional)
+Use any community detection algorithm for the actors' network and discuss whether the communities found make sense according to the vertex labels.
+
+```{r}
+library("igraph")
+install.packages("geomnet")
+library("geomnet")
+
+# Community Detection 
+
+# Louvain
+# The algorithm tires to maximize the strengths of connections inside a community and minimizes connections between different communities
+louvain_partition  <- cluster_louvain(actorNetwork, weights=df_edges$weight)
+
+# assign communities to graph 
+actorNetwork$community <- louvain_partition$membership 
+
+# see how many communities there are 
+unique(actorNetwork$community)
+# there is 59 distinct communities
+
+
+communities <- data.frame() 
+for (i in unique(actorNetwork$community)) {
+  induced_subgraph(actorNetwork, v = which(actorNetwork$community == i)) 
+  # get size of each subgraph 
+  size <- igraph::gorder(subgraph) 
+  # get betweenness centrality 
+  btwn <- igraph::betweenness(subgraph) 
+  communities <- communities %>% dplyr::bind_rows(data.frame(
+    community = i, 
+    n_characters = size, 
+    most_important = names(which(btwn == max(btwn))) 
+    ) 
+  ) 
+} 
+
+membership(lc)
+
+
+#plot(lc, actorNetwork)
+
+# Infomap
+imc <- cluster_infomap(actorNetwork)
+membership(imc)
+communities(imc)
+plot(lc, actorNetwork)
+                                                                                                                                                                                                                                                                                                                     
+
+
+```

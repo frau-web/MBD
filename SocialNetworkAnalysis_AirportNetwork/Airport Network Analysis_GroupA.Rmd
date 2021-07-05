@@ -1,0 +1,699 @@
+---
+title: "Airport Connection Network Analysis"
+output:
+html_document:
+df_print: paged
+---
+
+
+* Data set Description: 
+
+The routes & airport data are from www.openflights.org. The routes data was last updated in 2014, while the airport data was last updated in 2017.
+
+***
+```{r}
+#Loading the necessary libraries:
+library(dplyr)
+library(ggplot2)
+library(igraph)
+library(itertools)
+library(psych)
+library(rgexf)
+library(ggrepel)
+library(RgoogleMaps)
+library(ggmap)
+library(mapproj)
+library(sf)
+library(OpenStreetMap)
+library(devtools)
+library(DT)
+library(plyr)
+library(geosphere) # For spatial methods  
+library(threejs)   # threejs is used for 3-D interactive Earth Visualization
+library(rworldmap) # For creating earth map
+library(leaflet)   # Leaflet for R provides functions to control and integrate Leaflet, a JavaScript library for interactive maps, within R.
+library(rgeos)     # Provides functions for handling operations on topologies.
+library(raster)    # For raster image
+library(DT)         # For creating interactive tables
+library(ggplot2)
+library(sp)          # For Spatial processing of data
+library(ggmap)      # To reverse geocode Long/Lat
+library(knitr)        # TO enable 3-D visualization embedding in the HTML page
+library(rglwidget)
+library(rgl)
+library(sqldf)
+```
+***
+
+# 1. Load data & Graph
+
+## 1.1 Loading Data & Examine Dataframe
+```{r}
+routes_url <- "https://gist.githubusercontent.com/hannahbhchou/8f79bddf4ad93a573ada0d10453fe7d5/raw/a3b2624b38579d0c450d76532031f3f47a269dec/routes.csv"
+airport_url <- "https://gist.githubusercontent.com/hannahbhchou/5f59fb70e3d287c577af4b1d74a13cb5/raw/98ec7a19cbe39bd92857280fd8a02e80c9ea249f/airports.csv"
+
+routes_df <- read.csv(routes_url, header = TRUE )
+airport_df <- read.csv(airport_url, header =  TRUE)
+```
+
+```{r}
+head(routes_df)
+head(airport_df)
+```
+
+```{r}
+str(routes_df)
+str(airport_df)
+```
+
+```{r}
+#drop unnecessary columns
+airport_drop_col <- c("ICAO","Altitude","Timezone","DST", "Tz.database.time.zone","Type", "Source")
+routes_drop_col <- c("codeshare","stops","equipment")
+
+airport_df <- airport_df %>% dplyr::select(-one_of(airport_drop_col))
+routes_df <- routes_df %>% dplyr::select(-one_of(routes_drop_col))
+```
+
+
+## 1.2 Graph from dataframe & Graph Attributes
+```{r}
+routes_edges <- routes_df %>% dplyr::select("source.airport", "destination.airport")
+g <- graph_from_data_frame(d = routes_edges, directed = TRUE)
+```
+
+```{r}
+num_edge <- gsize(g) 
+num_vertex <- gorder(g) 
+print(paste("There are", num_edge, "edges."))
+print(paste("There are", num_vertex, "vertices."))
+```
+
+## 1.3 Initial Plotting
+```{r}
+plot(g, vertex.label= NA, layout = layout_nicely(g))
+```
+
+Already we could see there nodes more on the outskirt, the lonely islands in terms of air traffic
+
+***
+
+# 2. Centrality Measures
+
+We are using 3 centrality measures to evaluate the nodes of our graph.
+```{r}
+#Run all measurements
+degree_vec <- degree(g)
+betweenness_vec <- betweenness(g)
+closeness_vec <- closeness(g)
+in_degree_vec <- degree(g, mode = "in")
+out_degree_vec <- degree(g, mode = "out")
+eigen_vec <- eigen_centrality(g)$vector
+```
+
+
+
+```{r}
+#Attaching measures to the airport_df
+degree_df <- as.data.frame(as.table(degree_vec))
+betweenness_df <- as.data.frame(as.table(betweenness_vec))
+closeness_df <- as.data.frame(as.table(closeness_vec))
+in_degree_df <- as.data.frame(as.table(in_degree_vec))
+out_degree_df <- as.data.frame(as.table(out_degree_vec))
+eigen_df <- as.data.frame(as.table(eigen_vec))
+
+
+
+names(degree_df)[1] <- "id"
+names(degree_df)[2] <- "degree"
+
+names(betweenness_df)[1] <- "id"
+names(betweenness_df)[2] <- "betweenness"
+
+names(closeness_df)[1] <- "id"
+names(closeness_df)[2] <- "closeness"
+
+names(in_degree_df)[1] <- "id"
+names(in_degree_df)[2] <- "in_degree"
+
+names(out_degree_df)[1] <- "id"
+names(out_degree_df)[2] <- "out_degree"
+
+names(eigen_df)[1] <- "id"
+names(eigen_df)[2] <- "eigenvector"
+
+airport_df <-  airport_df %>% left_join(degree_df, by = c("IATA" = "id"))  %>%
+                left_join(in_degree_df, by = c("IATA" = "id")) %>%
+                left_join(out_degree_df, by = c("IATA" = "id")) %>%
+                left_join(betweenness_df, by = c("IATA" = "id")) %>%
+                left_join(closeness_df, by = c("IATA" = "id")) %>%
+                left_join(eigen_df, by = c("IATA" = "id"))
+
+airport_df <- airport_df[complete.cases(airport_df),]
+```
+
+
+
+## 2.1 Degree Centrality 
+
+### 2.1.1 Maximum & Minimum Degree
+```{r}
+max_degree <- max(degree_vec)
+min_degree <- min(degree_vec)
+print(paste("Maximum degree is", max_degree, "degree."))
+print(paste("Minimum degree is", min_degree, "degree."))
+```
+
+
+```{r}
+max_in_degree <- max(in_degree_vec)
+min_in_degree <- min(in_degree_vec)
+print(paste("Maximum in degree is", max_in_degree, "degree, which means this airport receives flights  from", max_in_degree, "destinations."))
+print(paste("Minimum degree is", min_in_degree, "degree, which means this airport doesn't receive any flights."))
+```
+```{r}
+max_out_degree <- max(out_degree_vec)
+min_out_degree <- min(out_degree_vec)
+print(paste("Maximum out degree is", max_out_degree, "degree, which means this airport receives flights  from", max_out_degree, "destinations."))
+print(paste("Minimum degree is", min_out_degree, "degree, which means this airport  doesn't have departing flights."))
+```
+
+### 2.1.2 Top 20 Degree Airport
+```{r}
+top20_degree_df <- airport_df[order(airport_df$degree, decreasing = TRUE),][1:20,c("IATA", "Name", "Country", "City","degree")]
+top20_degree_df
+```
+```{r}
+#set ggplot theme
+world_theme <- theme(panel.background = element_rect(fill = "lightblue",
+               colour = "lightblue"),
+               panel.grid.major = element_blank(), 
+               panel.grid.minor = element_blank(),
+               # surpress legend
+               legend.position = "none",
+               axis.line=element_blank(),
+               axis.text.x=element_blank(),
+               axis.text.y=element_blank(),
+               axis.ticks=element_blank(),
+               axis.title.x=element_blank(),
+               axis.title.y=element_blank())
+```
+
+
+```{r}
+#set lower bound for label showing
+thres <-top20_degree_df[20, "degree"]
+
+degree_plot <- ggplot(airport_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  stat_density2d(aes(fill = ..level..,  alpha = I(.3)),
+                 size = 1, bins = 5, data = airport_df,
+                 geom = "polygon") +
+  geom_point(color="red", alpha = .2, size=airport_df$degree/150) +
+  # define color of density polygons
+  scale_fill_gradient(low = "grey50", high = "grey20") +
+  world_theme +
+  geom_text_repel(data = subset(airport_df, degree > thres), aes(x=Longtitude, y= Latitude, label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) + ggtitle("By Degree")
+
+degree_plot
+```
+
+
+```{r}
+top20_in_degree_df <- airport_df[order(airport_df$in_degree, decreasing = TRUE),][1:20,c("IATA", "Name", "Country", "City","in_degree")]
+top20_in_degree_df
+```
+
+```{r}
+top20_out_degree_df <- airport_df[order(airport_df$out_degree, decreasing = TRUE),][1:20,c("IATA", "Name", "Country", "City","out_degree")]
+top20_out_degree_df
+```
+
+### 2.1.3 Degree Histogram & Statistics 
+```{r}
+degree_hist <- ggplot(degree_df,aes(x= degree)) +
+               geom_histogram(binwidth = 10, fill = "lightblue") + 
+               xlab(label = "Degree Distribution") +
+               theme_classic()
+degree_hist
+```
+
+```{r}
+psych::describe(degree_df$degree)
+```
+We could see we have a very right-skewed distribution, as most of the airports have small number of degree, while the top tiers have plenty.
+
+Who are the medians?
+```{r}
+eightdegree_df <- airport_df[which(airport_df$degree==8),c("IATA", "Name", "Country", "City","degree")]
+
+sample_n(eightdegree_df, 20)
+```
+These are mostly regional airport which travel to and from 4 other airports.
+
+### 2.1.4 In Degree & Out Degree Difference
+```{r}
+airport_df$degree_diff <- with(airport_df, out_degree - in_degree) 
+```
+
+
+```{r}
+most_outgoing <- airport_df[order(airport_df$degree_diff, decreasing = TRUE),][1:20,]
+most_outgoing[,c("IATA", "Name", "Country", "City","in_degree", "out_degree")]
+```
+
+```{r}
+out_going_plot <- ggplot(most_outgoing, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=most_outgoing$degree_diff) +
+  geom_text_repel(data = most_outgoing, (aes(x=Longtitude, y= Latitude, label=Name)), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("Most Out Going Airport")
+
+out_going_plot
+```
+
+
+```{r}
+most_incoming <- airport_df[order(airport_df$degree_diff, decreasing = FALSE),][1:20,]
+most_incoming[,c("IATA", "Name", "Country", "City","in_degree", "out_degree")]
+```
+
+
+```{r}
+in_coming_plot <- ggplot(most_incoming, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=abs(most_incoming$degree_diff)) +
+  geom_text_repel(data = most_incoming, (aes(x=Longtitude, y= Latitude, label=Name)), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("Most In Coming Airport")
+
+in_coming_plot
+```
+Interestingly, the two Saudi airports Prince Mohammad Bin Abdulaziz Airport in Madinah and King Abdulaziz International Airport in Jeddah, both ranked high for the degree differences, one for incoming one for out going. It may suggest that a lot of people are visiting Saudi Arabia by entering Madinah and leaving through Jeddah, that's why more routes are accommodating such needs.
+
+
+## 2.2 Betweenness Centrality 
+```{r}
+top20_betweenness_df <- airport_df[order(airport_df$betweenness, decreasing = TRUE),][1:20,]
+top20_betweenness_df[,c("IATA", "Name", "Country", "City","betweenness")]
+```
+
+```{r}
+#set lower bound for label showing
+thres <-top20_betweenness_df[20, "betweenness"]
+
+betweenness_plot <- ggplot(airport_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  stat_density2d(aes(fill = ..level..,  alpha = I(.3)),
+                 size = 1, bins = 5, data = airport_df,
+                 geom = "polygon") +
+  geom_point(color="red", alpha = .2, size=airport_df$betweenness/100000) +
+  world_theme +
+geom_text_repel(data = subset(airport_df, betweenness>= thres), aes(x=Longtitude, y= Latitude, label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("By Betweenness")
+
+betweenness_plot
+```
+
+Which airports are Top Betweenness but not Top Degree?
+```{r}
+`%nin%` = Negate(`%in%`)
+
+for (i in top20_betweenness_df$Name){
+  if (i %nin% top20_degree_df$Name){
+    print(i)
+  } 
+}
+```
+
+
+
+## 2.3 Closeness Centrality
+```{r}
+top20_closeness_df <- airport_df[order(airport_df$closeness, decreasing = TRUE),][1:20,]
+top20_closeness_df[,c("IATA", "Name", "Country", "City","closeness")]
+```
+
+
+```{r}
+#set lower bound for label showing
+thres <-top20_closeness_df[20, "closeness"]
+
+closeness_plot <- ggplot(airport_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  stat_density2d(aes(fill = ..level..,  alpha = I(.3)),
+                 size = 1, bins = 5, data = airport_df,
+                 geom = "polygon") +
+  geom_point(color="red", alpha = .2, size=airport_df$degree/200) +
+  world_theme +
+geom_text_repel(data = subset(airport_df, closeness >= thres), aes(x=Longtitude, y= Latitude, label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("By Closeness")
+
+closeness_plot
+```
+
+
+```{r}
+for (i in top20_closeness_df$Name){
+  if (i %nin% top20_degree_df$Name){
+    print(i)
+  } 
+}
+```
+## 2.4 Eigenvector Centrality
+```{r}
+top20_eigen_df <- airport_df[order(airport_df$eigenvector, decreasing = TRUE),][1:20,]
+top20_eigen_df[,c("IATA", "Name", "Country", "City","eigenvector")]
+```
+```{r}
+#set lower bound for label showing
+thres <-top20_eigen_df[20, "eigenvector"]
+
+eigen_plot <- ggplot(airport_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  stat_density2d(aes(fill = ..level..,  alpha = I(.3)),
+                 size = 1, bins = 5, data = airport_df,
+                 geom = "polygon") +
+  geom_point(color="red", alpha = .2, size=airport_df$eigenvector*10) +
+  world_theme +
+geom_text_repel(data = subset(airport_df, eigenvector >= thres), aes(x=Longtitude, y= Latitude, label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("By Eigenvector")
+
+eigen_plot
+```
+```{r}
+for (i in top20_eigen_df$Name){
+  if (i %nin% top20_degree_df$Name){
+    print(i)
+  } 
+}
+```
+
+
+***
+
+# 3. Comunnity detection 
+
+We are using the quicker method fastgreedy, so we will have to remove direction from our graph.
+
+## 3.1 Sizes of Communities
+```{r}
+graph <- as.undirected(g)
+graph <- simplify(graph)
+fastgreedy_communities <- fastgreedy.community(graph)
+V(graph)$community <- fastgreedy_communities$membership
+
+sizes(fastgreedy_communities)
+```
+
+We have obtained 49 communities, we will explore the biggest 4. 
+
+## 3.2 Initial Plotting 
+```{r}
+plot(fastgreedy_communities, graph, vertex.label = NA)
+```
+```{r}
+#Attaching community id to the airport_df
+membership_vec <- membership(fastgreedy_communities)
+membership_df <-as.data.frame(as.table(membership_vec))
+names(membership_df)[1] <- "id"
+names(membership_df)[2] <- "community id"
+airport_df <-airport_df %>% left_join(membership_df, by = c("IATA" = "id"))
+```
+
+We will then take samples of 20 to see how are these communities formed.
+```{r}
+sample_n(airport_df[airport_df$`community id` == 1,], 20)[,c("IATA", "Country","Name")]
+```
+```{r}
+sample_n(airport_df[airport_df$`community id` == 2,], 20)[,c("IATA", "Country","Name")]
+```
+```{r}
+sample_n(airport_df[airport_df$`community id` == 3,], 20)[,c("IATA", "Country","Name")]
+```
+```{r}
+sample_n(airport_df[airport_df$`community id` == 4,], 20)[,c("IATA", "Country","Name")]
+```
+```{r}
+community_1 <- airport_df %>% dplyr::filter(`community id` == 1)
+community_2 <- airport_df %>% dplyr::filter(`community id` == 2)
+community_3 <- airport_df %>% dplyr::filter(`community id` == 3)
+community_4 <- airport_df %>% dplyr::filter(`community id` == 4)
+```
+## 3.3 Graphing the Communities
+```{r}
+community_1_plot <- ggplot(community_1, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=community_1$degree/100) +
+  ggtitle("Community 1")
+
+community_1_plot
+```
+Community 1 is focused on Europe, a bit of Middle East and some coastal part of Africa. 
+
+```{r}
+community_2_plot <- ggplot(community_2, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=community_2$degree/100) +
+  ggtitle("Community 2")
+
+community_2_plot
+```
+Community 2 is focused on the Asia-Pacific, Central Asia and Middle East.
+
+```{r}
+community_3_plot <- ggplot(community_3, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=community_3$degree/100) +
+  ggtitle("Community 3")
+
+community_3_plot
+```
+Community 3 is focused in US and some parts of Central & South America. 
+
+```{r}
+community_4_plot <- ggplot(community_4, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=community_4$degree/100) +
+  ggtitle("Community 4")
+
+community_4_plot
+```
+Community 4 is mostly centralized in Alaska, with few routes. 
+
+***
+
+# 4. Insights & Analysis
+
+## 4.1 Where are these routes flying from and to? 
+```{r}
+country_origin_df <- airport_df %>% dplyr::select("IATA","Country") %>% dplyr::rename(source.airport=IATA)
+df_1 <- merge(x = routes_df, y = country_origin_df, by = "source.airport", all.x = TRUE)
+df_1 <- df_1 %>% dplyr::rename(Country_origin=Country)
+
+country_destination_df <- airport_df %>% dplyr::select("IATA","Country") %>% dplyr::rename(destination.airport=IATA)
+df_2 <- merge(x = df_1, y = country_destination_df, by = "destination.airport", all.x = TRUE)
+df_2 <- df_2 %>% dplyr::rename(Country_destination=Country)
+
+df3 <- df_2 %>% dplyr::count(Country_origin, Country_destination, sort=TRUE)
+df3 <- df3 %>%dplyr::rename(number_of_routes=n, source=Country_origin, target=Country_destination)
+df3[1:30,]
+```
+We could see most popular routes are domestic,and are from countries that are either big geographically or population-wise. Then some of the most popular internal routes are:
+
+* UK to Spain
+* Spain to UK
+* Mexico to US
+
+
+
+## 4.2 Diameter 
+Diameter: Which is the longest route?
+```{r}
+diameter_routes <- diameter(g, directed = TRUE)
+print(paste("The diameter of the route graph is", diameter_routes, ", which means one person can go to", diameter_routes, "cities in one go without repeating the places this person has been."))
+```
+
+```{r}
+diameter_stops <- get_diameter(g)
+diameter_stops <- as.vector(names(diameter_stops))
+diameter_df <- airport_df[match(diameter_stops, airport_df$IATA),]
+diameter_df <- diameter_df[complete.cases(diameter_df),]
+diameter_df
+```
+
+
+```{r}
+diameter_plot <- ggplot(diameter_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .5, size=2) +
+  geom_text_repel(aes(label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf)
+```
+
+```{r}
+x1 <- diameter_df[1,"Longtitude"]
+x2 <- diameter_df[2,"Longtitude"]
+x3 <- diameter_df[3,"Longtitude"]
+x4 <- diameter_df[4,"Longtitude"]
+x5 <- diameter_df[5,"Longtitude"]
+x6 <- diameter_df[6,"Longtitude"]
+x7 <- diameter_df[7,"Longtitude"]
+x8 <- diameter_df[8,"Longtitude"]
+x9 <- diameter_df[9,"Longtitude"]
+
+y1 <- diameter_df[1,"Latitude"]
+y2 <- diameter_df[2,"Latitude"]
+y3 <- diameter_df[3,"Latitude"]
+y4 <- diameter_df[4,"Latitude"]
+y5 <- diameter_df[5,"Latitude"]
+y6 <- diameter_df[6,"Latitude"]
+y7 <- diameter_df[7,"Latitude"]
+y8 <- diameter_df[8,"Latitude"]
+y9 <- diameter_df[9,"Latitude"]
+
+
+diameter_plot + 
+geom_curve(aes(x = x1, y = y1, xend = x2, yend = y2, colour = "black")) +
+geom_curve(aes(x = x2, y = y2, xend = x3, yend = y3, colour = "black")) +
+geom_curve(aes(x = x3, y = y3, xend = x4, yend = y4, colour = "black")) +
+geom_curve(aes(x = x4, y = y4, xend = x5, yend = y5, colour = "black")) +
+geom_curve(aes(x = x5, y = y5, xend = x6, yend = y6, colour = "black")) +
+geom_curve(aes(x = x6, y = y6, xend = x7, yend = y7, colour = "black")) +
+geom_curve(aes(x = x7, y = y7, xend = x8, yend = y8, colour = "black")) +
+geom_curve(aes(x = x8, y = y8, xend = x9, yend = y9, colour = "black")) +
+ggtitle("Diameter Path")
+```
+
+## 4.3 Zoom in on Specific Cities
+Where are the the places connected to Madrid
+```{r}
+#CREATING SUBFRAMES WITH THE LATITUDE AND LONGITUDE FOR THE AIRPORT OF DEPARTURE AND THE AIRPORT OF ARRIVAL
+
+coords_origin <- airport_df %>% dplyr::select('Airport.ID', 'Latitude', 'Longtitude') %>% dplyr::rename(SourceLat=Latitude,SourceLong=Longtitude)
+
+coords_destiny <- airport_df %>% dplyr::select('Airport.ID', 'Latitude', 'Longtitude') %>% dplyr::rename(DestLat=Latitude, DestLong=Longtitude)
+
+flights_to_from <- routes_df %>% 
+  filter((routes_df$source.airport=="MAD") |     (routes_df$destination.airport=="MAD"))
+
+#MERGING WITH ROUTES DATAFRAME BUT USING THE AIRPORT OF DEPARTURE AS COMMON COLUMN
+flights_coords_origin <- merge(flights_to_from, coords_origin, by.x='source.airport.id', by.y='Airport.ID' )
+
+#MERGING THE DATAFRAME FLIGHTS_COORDS_ORIGIN WITH THE COORDINATES OF ARRIVAL USING THE AIRPORT OF ARRIVAL AS COMMON COLUMN
+flights_coords_destination <- merge(flights_to_from, coords_destiny, by.x='destination.airport.id', by.y='Airport.ID')
+
+flights_with_coords <- merge(flights_coords_origin, flights_coords_destination)
+
+#SUBFRAMING AND EXTRACTING ONLY COORDINATES OF ORIGIN AND DESTINATION
+coords <- flights_with_coords %>% dplyr::select('SourceLat','SourceLong','DestLat','DestLong')
+```
+
+
+```{r}
+#CREATING DATAFRAME WITH THE COORDINATES OF ORIGIN
+source_df<-data.frame(SourceLong=coords$SourceLong,SourceLat=coords$SourceLat)
+#TRANSFORMING THEM INTO SPATIALPOINTS
+source_sp<-SpatialPoints(source_df, proj4string=CRS("+proj=longlat"))
+#CREATING A DATAFRAME OUT OF THOSE POINTS
+source_spdf <- SpatialPointsDataFrame(source_sp, data = source_df)
+```
+
+```{r}
+#CREATING DATAFRAME WITH THE COORDINATES OF DESTINATION
+dest_df<-data.frame(SourceLong=coords$DestLong,SourceLat=coords$DestLat)
+#TRANSFORMING THEM INTO SPATIALPOINTS
+dest_sp<-SpatialPoints(dest_df, proj4string=CRS("+proj=longlat"))
+#CREATING A DATAFRAME OUT OF THOSE POINTS
+dest_spdf <- SpatialPointsDataFrame(dest_sp, data = dest_df)
+```
+
+```{r}
+comb_df<-data.frame(coords)
+comb_df$distance<-distHaversine(source_sp,dest_sp)
+```
+
+```{r}
+#ALLOWS US TO RETRIEVE THE MOST COMMON FLIGHTS BY COORDINATES
+source_da   <- factor(sprintf("%.2f:%.2f",comb_df[,2], comb_df[,1]))
+freq <- sort(table(source_da), decreasing=TRUE)
+frequent_destinations <- names(freq)[1:50]
+idx <- source_da %in% frequent_destinations
+LongLat <- unique(comb_df[idx,1:2])
+frequent_flights <-comb_df[idx,]
+```
+
+```{r}
+#PLOTTING THE DATAFRAME SO WE GET THE GLOBE
+(earth <- system.file("images/world.jpg",  package="threejs"))
+test_df <- data.frame(origin_lat = comb_df[,1], origin_long = comb_df[,2], dest_lat = comb_df[,3], dest_long = comb_df[,4])
+#
+globejs(img=earth, lat=LongLat[,1], long=LongLat[,2], arcs=test_df,
+        arcsHeight=0.3, arcsLwd=2, arcsColor="red", arcsOpacity=0.15,
+        atmosphere=TRUE,bg="white", height = 800 , width = 800)
+```
+
+## 4.4 Travelling Between 2 Specific Stops
+If I’m a consultant based in Madrid and I go to Shanghai every month, which airline should I pick?
+```{r}
+distances(g, "MAD", "PVG")
+```
+
+
+```{r}
+n_mad <- neighbors(g, "MAD", mode = c('in'))
+n_pvg <- neighbors(g, "PVG", mode = c('out'))
+middle_stops <- as.table(intersection(n_mad, n_pvg))
+names(middle_stops)
+```
+```{r}
+tempdf <- routes_df %>% dplyr::select("airline","source.airport", "destination.airport") %>% dplyr::rename(source = source.airport, dest = destination.airport) 
+
+tempdf1 <- tempdf %>% dplyr::filter(source == "MAD") %>% dplyr::rename(airline1 = airline)
+
+tempdf2 <- tempdf %>% dplyr::filter(dest == "PVG") %>% dplyr::rename(airline2 = airline)
+```
+
+```{r}
+sqldf("select tempdf1.*, tempdf2.* from tempdf1, tempdf2 where (tempdf1.dest = tempdf2.source) and airline1 = airline2")
+```
+From the list we could see that American Airline(AA) and Lufthansa Airline (LF) are the only two airlines that have more than 1 routes fully operated by themselves. As there could be uncertainty as airports, given more than 1 choice as the pit stop could be better options. 
+
+## 4.5 Adding Passenger Volume
+Are the busiest airport really busy?
+We wanted to add the passenger volume to the data set to evaluate their relation with degree relationship. As the free & available data only has ranked 20 airports, we will do it on a small scale. 
+
+```{r}
+passenger_url <- "https://gist.githubusercontent.com/hannahbhchou/01cbc0081c8a080350e50d0ead1a1fcc/raw/33f3a9b29ae6a7323ace128f94775025d23485cb/passenger_2017.csv"
+
+passenger_df <- read.csv(passenger_url, header = TRUE)
+```
+
+```{r}
+passenger_df <- passenger_df %>% left_join(airport_df, by = c("IATA" = "IATA"))
+passenger_df$v_d_ratio <- with(passenger_df, Volume / degree)
+```
+
+```{r}
+passenger_df[,c("IATA", "Name", "Volume", "degree", "v_d_ratio")]
+```
+One thing we've noticed that all of the top 20 passenger volume airports are scattered among the most popular communities, but maybe because of their geography they are separated. 
+
+```{r}
+passenger_plot <- ggplot(passenger_df, (aes(x = Longtitude, y= Latitude))) +   
+  borders("world", colour=NA, fill="antiquewhite")  +
+  world_theme +
+  geom_point(color="red", alpha = .2, size=passenger_df$v_d_ratio/18000) +
+  geom_text_repel( aes(x=Longtitude, y= Latitude, label=Name), color = "black", fontface = "italic", size = 2, max.overlaps = Inf) +
+  ggtitle("Top 20 Passenger Volume Airports")
+
+passenger_plot
+```
+We could see that though Tokyo Haneda airport and Soekarno-Hatta International Airport are the highest in terms of volume/degree ratio, which means for every route they serve more passengers. 
+
+
